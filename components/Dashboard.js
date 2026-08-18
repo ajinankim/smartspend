@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { CATEGORY_COLORS, CATEGORIES } from '../lib/categories';
-import { withCategory, monthlyTotals, monthlyAverage, months } from '../lib/analysis';
+import { withCategory, monthlyTotals, monthlyAverage } from '../lib/analysis';
 import EChart from './EChart';
 
 const DATA_START = '2025-09-01'; // 2025년 9월부터만
@@ -13,20 +13,13 @@ export default function Dashboard({ expenses, user }) {
   const [startDate, setStartDate] = useState('2025-09-01');
   const [endDate, setEndDate] = useState('');
   const [selCategory, setSelCategory] = useState('전체');
+  const [selMonth, setSelMonth] = useState(null); // 'YYYY-MM' 또는 null
 
-  // 1) 2025-09 이후 데이터만, 카테고리 부여
-  const base = useMemo(() => {
-    return withCategory(expenses).filter((t) => t.date >= DATA_START);
-  }, [expenses]);
-
-  const maxDate = useMemo(() => {
-    if (!base.length) return '';
-    return [...base.map((t) => t.date)].sort().pop();
-  }, [base]);
-  // endDate 기본값 = 최대일
+  const base = useMemo(() => withCategory(expenses).filter((t) => t.date >= DATA_START), [expenses]);
+  const maxDate = useMemo(() => (base.length ? [...base.map((t) => t.date)].sort().pop() : ''), [base]);
   const effectiveEnd = endDate || maxDate;
 
-  // 2) 기간 + 브랜드 + 카테고리 필터
+  // 기간 + 브랜드 필터
   const filtered = useMemo(() => {
     let f = base;
     if (startDate) f = f.filter((t) => t.date >= startDate);
@@ -35,27 +28,33 @@ export default function Dashboard({ expenses, user }) {
     return f;
   }, [base, startDate, effectiveEnd, brand]);
 
+  // 막대 클릭 월 → viewData
+  const viewData = useMemo(() => {
+    if (selMonth) return filtered.filter((t) => t.date.slice(0, 7) === selMonth);
+    return filtered;
+  }, [filtered, selMonth]);
+
   const brands = useMemo(() => ['전체', ...new Set(base.map((t) => t.brand))], [base]);
 
-  // 3) 집계
+  // 집계 (viewData 기준)
   const mt = useMemo(() => monthlyTotals(filtered), [filtered]);
   const cats = useMemo(() => {
     const m = {};
-    for (const t of filtered) m[t.category] = (m[t.category] || 0) + t.amount;
+    for (const t of viewData) m[t.category] = (m[t.category] || 0) + t.amount;
     return Object.entries(m).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
-  }, [filtered]);
-  const avg = useMemo(() => monthlyAverage(filtered), [filtered]);
-  const total = filtered.reduce((s, t) => s + t.amount, 0);
-  const thisMonth = mt.length ? mt[mt.length - 1].total : 0;
+  }, [viewData]);
+  const avg = useMemo(() => monthlyAverage(viewData), [viewData]);
+  const total = viewData.reduce((s, t) => s + t.amount, 0);
+  const top3 = cats.slice(0, 3);
 
-  // 상세 테이블: 선택 카테고리 필터
+  // 상세 내역: 월 + 카테고리 필터
   const detailRows = useMemo(() => {
-    let f = filtered;
+    let f = viewData;
     if (selCategory !== '전체') f = f.filter((t) => t.category === selCategory);
     return f;
-  }, [filtered, selCategory]);
+  }, [viewData, selCategory]);
 
-  // ---- 도넛 옵션 ----
+  // 도넛 옵션
   const pieOption = useMemo(() => ({
     tooltip: { trigger: 'item', formatter: '{b}: ₩{c} ({d}%)' },
     color: cats.map((c) => CATEGORY_COLORS[c.name]),
@@ -67,11 +66,9 @@ export default function Dashboard({ expenses, user }) {
     }],
   }), [cats]);
 
-  // ---- 월별 추이 + 툴팁(카테고리/카드사 구성비) ----
+  // 월별 추이 (툴팁: 카테고리/카드사 구성비, 클릭 시 월 필터)
   const barOption = useMemo(() => {
-    const monthTotals = {};
-    const monthCat = {};
-    const monthBrand = {};
+    const monthTotals = {}, monthCat = {}, monthBrand = {};
     for (const t of filtered) {
       const m = t.date.slice(0, 7);
       monthTotals[m] = (monthTotals[m] || 0) + t.amount;
@@ -103,15 +100,28 @@ export default function Dashboard({ expenses, user }) {
       grid: { left: 10, right: 10, top: 10, bottom: 0, containLabel: true },
       xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
       yAxis: { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } },
-      series: [{ type: 'bar', data: mt.map((m) => m.total), itemStyle: { color: '#4e79a7', borderRadius: [4, 4, 0, 0] }, barMaxWidth: 28 }],
+      series: [{
+        type: 'bar', data: mt.map((m) => m.total), barMaxWidth: 28,
+        itemStyle: {
+          color: (p) => (selMonth && mt[p.dataIndex].month === selMonth ? '#e15759' : '#4e79a7'),
+          borderRadius: [4, 4, 0, 0],
+        },
+      }],
     };
-  }, [filtered, mt]);
+  }, [filtered, mt, selMonth]);
 
+  const handleBarClick = (params) => {
+    if (params && params.dataIndex != null) {
+      const m = mt[params.dataIndex]?.month;
+      if (m) setSelMonth((prev) => (prev === m ? null : m));
+    }
+  };
   const handleDonutClick = (params) => {
     if (params && params.name) setSelCategory((prev) => (prev === params.name ? '전체' : params.name));
   };
+  const resetAll = () => { setSelMonth(null); setSelCategory('전체'); };
 
-  const totalFormatted = total.toLocaleString();
+  const isFiltered = !!selMonth || selCategory !== '전체';
 
   return (
     <div className="dash">
@@ -134,15 +144,38 @@ export default function Dashboard({ expenses, user }) {
         <button className="reset" onClick={() => { setStartDate(DATA_START); setEndDate(''); }}>전체</button>
       </div>
 
+      {isFiltered && (
+        <div className="filter-banner">
+          {selMonth && <span>📅 선택월: {selMonth}</span>}
+          {selCategory !== '전체' && <span>🏷️ {selCategory}</span>}
+          <button className="reset" onClick={resetAll}>전체 데이터 복귀</button>
+        </div>
+      )}
+
       <div className="summary">
-        <div className="card"><div className="lbl">총 지출</div><div className="val">₩{totalFormatted}</div></div>
+        <div className="card"><div className="lbl">{selMonth ? `${selMonth} 지출` : '총 지출'}</div><div className="val">₩{total.toLocaleString()}</div></div>
         <div className="card"><div className="lbl">월평균</div><div className="val">₩{avg.toLocaleString()}</div></div>
-        <div className="card"><div className="lbl">이번 달</div><div className="val">₩{thisMonth.toLocaleString()}</div></div>
+        <div className="card top3">
+          <div className="lbl">지출 TOP 3</div>
+          {top3.map((c, i) => (
+            <div key={c.name} className="top3-row">
+              <span className="top3-rank">{i + 1}</span>
+              <span className="top3-name" style={{ color: CATEGORY_COLORS[c.name] }}>{c.name}</span>
+              <span className="top3-amt">₩{c.total.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid">
-        <div className="panel"><h3>카테고리별 지출 <small>(클릭 시 상세 필터)</small></h3><EChart option={pieOption} height={320} onClick={handleDonutClick} /></div>
-        <div className="panel"><h3>월별 지출 추이</h3><EChart option={barOption} height={320} /></div>
+        <div className="panel">
+          <div className="panel-head">
+            <h3>카테고리별 지출 <small>(클릭 시 상세 필터)</small></h3>
+            <button className="reset" onClick={resetAll}>전체 데이터 복귀</button>
+          </div>
+          <EChart option={pieOption} height={320} onClick={handleDonutClick} />
+        </div>
+        <div className="panel"><h3>월별 지출 추이 <small>(막대 클릭 시 해당 월 필터)</small></h3><EChart option={barOption} height={320} onClick={handleBarClick} /></div>
       </div>
 
       <div className="panel">
