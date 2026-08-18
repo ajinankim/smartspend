@@ -1,5 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { CATEGORY_COLORS } from '../lib/categories';
 import {
   withCategory, monthlyTotals, categoryTotals, monthlyByCategory,
@@ -7,7 +9,7 @@ import {
 } from '../lib/analysis';
 import EChart from './EChart';
 
-export default function Dashboard({ expenses }) {
+export default function Dashboard({ expenses, user }) {
   const [brand, setBrand] = useState('전체');
   const [range, setRange] = useState('전체');
 
@@ -88,6 +90,10 @@ export default function Dashboard({ expenses }) {
     <div className="dash">
       <header className="topbar">
         <span className="brand">💸 SmartSpend</span>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span className="user-email">{user?.email}</span>
+          <button className="logout" onClick={() => signOut(auth)}>로그아웃</button>
+        </div>
         <div className="filters">
           <select value={brand} onChange={(e) => setBrand(e.target.value)}>
             {brands.map((b) => <option key={b} value={b}>{b}</option>)}

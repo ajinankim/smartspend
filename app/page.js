@@ -1,11 +1,26 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import Login from '../components/Login';
 import Dashboard from '../components/Dashboard';
 import expenses from '../data/expenses.json';
 
-export const metadata = {
-  title: 'SmartSpend - 지능형 개인 재무 관리',
-  description: '카드 지출 데이터 기반 지출 분석 및 예측 대시보드',
-};
-
 export default function Home() {
-  return <Dashboard expenses={expenses} />;
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  if (loading) {
+    return <div className="login-wrap"><div className="spinner" /></div>;
+  }
+
+  return user ? <Dashboard expenses={expenses} user={user} /> : <Login />;
 }

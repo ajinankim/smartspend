@@ -4,3 +4,7 @@
 /.vercel
 .env*
 *.log
+
+.vercel
+firebase_config.json
+users_import.json

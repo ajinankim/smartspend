@@ -31,3 +31,19 @@ body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f4f
   .summary { grid-template-columns: repeat(2, 1fr); }
   .grid { grid-template-columns: 1fr; }
 }
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-card { background: #fff; border-radius: 16px; padding: 36px; width: 100%; max-width: 380px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
+.login-brand { font-size: 26px; font-weight: 800; text-align: center; }
+.login-sub { text-align: center; color: #888; font-size: 13px; margin: 8px 0 20px; }
+.login-card .seg { display: flex; margin-bottom: 16px; border-radius: 8px; overflow: hidden; border: 1px solid #e2e2e2; }
+.login-card .seg button { flex: 1; padding: 9px; border: none; background: #f5f6f8; cursor: pointer; font-size: 13px; }
+.login-card .seg button.seg-on { background: #1a2332; color: #fff; font-weight: 600; }
+.login-card form { display: flex; flex-direction: column; gap: 10px; }
+.login-card input { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+.login-card button[type=submit] { padding: 13px; border: none; border-radius: 8px; background: linear-gradient(135deg, #f28e2b, #e15759); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+.login-card .error { color: #e15759; font-size: 12px; }
+.login-foot { text-align: center; color: #aaa; font-size: 11px; margin-top: 16px; }
+.user-email { font-size: 12px; color: #666; }
+.logout { padding: 6px 12px; border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; font-size: 12px; }
+.spinner { width: 34px; height: 34px; border: 3px solid #e2e2e2; border-top-color: #e15759; border-radius: 50%; animation: spin .8s linear infinite; margin: 40px auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
