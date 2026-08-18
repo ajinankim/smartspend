@@ -80,6 +80,16 @@ export default function Dashboard({ expenses, user }) {
       monthBrand[m][t.brand] = (monthBrand[m][t.brand] || 0) + t.amount;
     }
     const labels = mtCat.map((x) => x.label);
+    // 선택 카테고리의 CAGR (선택 기간 기준, 마지막 달에 표시)
+    let cagr = null;
+    if (selCategory !== '전체' && mtCat.length >= 2) {
+      const first = mtCat[0].total;
+      const last = mtCat[mtCat.length - 1].total;
+      if (first > 0 && last > 0) {
+        const years = mtCat.length / 12;
+        cagr = (Math.pow(last / first, 1 / years)) - 1;
+      }
+    }
     const tooltipFmt = (p) => {
       const m = p[0].dataIndex;
       const key = mtCat[m].month;
@@ -104,6 +114,11 @@ export default function Dashboard({ expenses, user }) {
       yAxis: { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } },
       series: [{
         type: 'bar', data: mtCat.map((m) => m.total), barMaxWidth: 28,
+        label: {
+          show: true, position: 'top', fontSize: 10, fontWeight: 'bold', color: '#c0392b',
+          formatter: (p) => (cagr != null && p.dataIndex === mtCat.length - 1)
+            ? `CAGR ${cagr >= 0 ? '+' : ''}${(cagr * 100).toFixed(1)}%` : '',
+        },
         itemStyle: {
           color: (p) => (selMonth && mtCat[p.dataIndex].month === selMonth ? '#e15759' : selCategory !== '전체' ? '#f28e2b' : '#4e79a7'),
           borderRadius: [4, 4, 0, 0],
