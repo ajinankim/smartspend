@@ -23,8 +23,11 @@ export default function Dashboard({ expenses, user }) {
   const [selCategory, setSelCategory] = useState('전체');
   const [selMonth, setSelMonth] = useState(null); // 'YYYY-MM' 또는 null
   const [trendType, setTrendType] = useState('bar'); // bar | line
+  const [excludedIds, setExcludedIds] = useState(() => new Set());
 
-  const base = useMemo(() => withCategory(expenses).filter((t) => t.date >= DATA_START), [expenses]);
+  const base = useMemo(() => withCategory(expenses)
+    .filter((t) => t.date >= DATA_START)
+    .map((t, i) => ({ ...t, id: `${t.date}_${t.merchant}_${t.amount}_${t.brand}_${i}` })), [expenses]);
   const maxDate = useMemo(() => (base.length ? [...base.map((t) => t.date)].sort().pop() : ''), [base]);
   const effectiveEnd = endDate || maxDate;
 
@@ -37,16 +40,17 @@ export default function Dashboard({ expenses, user }) {
     return f;
   }, [base, startDate, effectiveEnd, brand]);
 
-  // 막대 클릭 월 → viewData
+  // 막대 클릭 월 → viewData (분석: 제외 항목 제거)
+  const analysisFiltered = useMemo(() => filtered.filter((t) => !excludedIds.has(t.id)), [filtered, excludedIds]);
   const viewData = useMemo(() => {
-    if (selMonth) return filtered.filter((t) => t.date.slice(0, 7) === selMonth);
-    return filtered;
-  }, [filtered, selMonth]);
+    if (selMonth) return analysisFiltered.filter((t) => t.date.slice(0, 7) === selMonth);
+    return analysisFiltered;
+  }, [analysisFiltered, selMonth]);
 
   const brands = useMemo(() => ['전체', ...new Set(base.map((t) => t.brand))], [base]);
 
   // 집계 (viewData 기준)
-  const mt = useMemo(() => monthlyTotals(filtered), [filtered]);
+  const mt = useMemo(() => monthlyTotals(analysisFiltered), [analysisFiltered]);
   const cats = useMemo(() => {
     const m = {};
     for (const t of viewData) m[t.category] = (m[t.category] || 0) + t.amount;
@@ -56,12 +60,21 @@ export default function Dashboard({ expenses, user }) {
   const total = viewData.reduce((s, t) => s + t.amount, 0);
   const top2 = cats.slice(0, 2);
 
-  // 상세 내역: 월 + 카테고리 필터
+  // 상세 내역: 월 + 카테고리 필터 (제외 항목 포함 표시)
   const detailRows = useMemo(() => {
-    let f = viewData;
+    let f = filtered;
+    if (selMonth) f = f.filter((t) => t.date.slice(0, 7) === selMonth);
     if (selCategory !== '전체') f = f.filter((t) => t.category === selCategory);
     return f;
-  }, [viewData, selCategory]);
+  }, [filtered, selMonth, selCategory]);
+
+  const toggleExclude = (id) => {
+    setExcludedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   // 도넛 옵션
   const pieOption = useMemo(() => ({
@@ -85,7 +98,7 @@ export default function Dashboard({ expenses, user }) {
     const grid = { left: 10, right: 10, top: 28, bottom: 0, containLabel: true };
     const catMap = {};
     if (selCategory !== '전체') {
-      monthlyTotals(filtered.filter((t) => t.category === selCategory)).forEach((m) => { catMap[m.month] = m.total; });
+      monthlyTotals(analysisFiltered.filter((t) => t.category === selCategory)).forEach((m) => { catMap[m.month] = m.total; });
     }
     const catVals = allLabels.map((_, i) => catMap[mtAll[i].month] || 0);
 
@@ -93,7 +106,7 @@ export default function Dashboard({ expenses, user }) {
       // ---- 막대 차트 ----
       if (selCategory === '전체') {
         const monthTotals = {}, monthCat = {}, monthBrand = {};
-        for (const t of filtered) {
+        for (const t of analysisFiltered) {
           const m = t.date.slice(0, 7);
           monthTotals[m] = (monthTotals[m] || 0) + t.amount;
           monthCat[m] = monthCat[m] || {};
@@ -192,7 +205,7 @@ export default function Dashboard({ expenses, user }) {
         { name: '전체 지출', type: 'line', smooth: true, data: allVals, showSymbol: false, lineStyle: { color: totalColor, width: 2 }, itemStyle: { color: totalColor } },
       ],
     };
-  }, [filtered, mt, selCategory, selMonth, trendType]);
+  }, [analysisFiltered, mt, selCategory, selMonth, trendType]);
 
   const handleBarClick = (params) => {
     if (params && params.dataIndex != null) {
@@ -245,6 +258,11 @@ export default function Dashboard({ expenses, user }) {
             ))}
           </div>
         </div>
+        <div className="card excl-card">
+          <div className="lbl">제외 항목</div>
+          <div className={`excl-val ${excludedIds.size > 0 ? 'on' : ''}`}>{excludedIds.size}개</div>
+          {excludedIds.size > 0 && <button className="reset" onClick={() => setExcludedIds(new Set())}>초기화</button>}
+        </div>
       </div>
 
       <div className="grid">
@@ -278,16 +296,20 @@ export default function Dashboard({ expenses, user }) {
           </select>
         </div>
         <table className="tx-table">
-          <thead><tr><th>날짜</th><th>카드</th><th>가맹점</th><th>카테고리</th><th>금액</th></tr></thead>
+          <thead><tr><th>날짜</th><th>카드</th><th>가맹점</th><th>카테고리</th><th>금액</th><th>제외</th></tr></thead>
           <tbody>
-            {detailRows.slice(-200).reverse().map((t, i) => (
-              <tr key={i}>
-                <td>{t.date}</td><td>{t.brand}</td><td>{t.merchant}</td>
-                <td><span className="badge" style={{ background: CATEGORY_COLORS[t.category] }}>{t.category}</span></td>
-                <td className="amt">₩{t.amount.toLocaleString()}</td>
-              </tr>
-            ))}
-            {detailRows.length === 0 && <tr><td colSpan="5" style={{ textAlign: 'center', color: '#aaa', padding: 20 }}>해당 기간 내 내역이 없습니다.</td></tr>}
+            {detailRows.slice(-200).reverse().map((t, i) => {
+              const excluded = excludedIds.has(t.id);
+              return (
+                <tr key={t.id} className={excluded ? 'excluded-row' : ''}>
+                  <td>{t.date}</td><td>{t.brand}</td><td>{t.merchant}</td>
+                  <td><span className="badge" style={{ background: CATEGORY_COLORS[t.category] }}>{t.category}</span></td>
+                  <td className="amt">₩{t.amount.toLocaleString()}</td>
+                  <td className="excl-cell"><input type="checkbox" checked={excluded} onChange={() => toggleExclude(t.id)} title="분석에서 제외" /></td>
+                </tr>
+              );
+            })}
+            {detailRows.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', color: '#aaa', padding: 20 }}>해당 기간 내 내역이 없습니다.</td></tr>}
           </tbody>
         </table>
       </div>
