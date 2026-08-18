@@ -47,3 +47,10 @@ body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f4f
 .logout { padding: 6px 12px; border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; font-size: 12px; }
 .spinner { width: 34px; height: 34px; border: 3px solid #e2e2e2; border-top-color: #e15759; border-radius: 50%; animation: spin .8s linear infinite; margin: 40px auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.filters-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; background: #fff; padding: 10px 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.filters-bar label { font-size: 12px; color: #888; }
+.filters-bar select, .filters-bar input[type=date] { padding: 6px 8px; border: 1px solid #ccc; border-radius: 7px; font-size: 13px; }
+.filters-bar .reset { padding: 6px 12px; border: 1px solid #ccc; border-radius: 7px; background: #f5f6f8; cursor: pointer; font-size: 12px; }
+.panel h3 small, .detail-head h3 small { color: #aaa; font-weight: 400; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+.cat-select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 7px; font-size: 12px; }
