@@ -64,3 +64,5 @@ body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f4f
 .top2-rank { width: 22px; height: 22px; border-radius: 50%; background: #1a2332; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .top2-name { font-weight: 700; font-size: 13px; }
 .top2-amt { font-weight: 700; font-size: 13px; }
+.home-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid #e15759; background: #fff; color: #e15759; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.home-btn:hover { background: #fff0f0; }

@@ -146,14 +146,6 @@ export default function Dashboard({ expenses, user }) {
         <button className="reset" onClick={() => { setStartDate(DATA_START); setEndDate(''); }}>전체</button>
       </div>
 
-      {isFiltered && (
-        <div className="filter-banner">
-          {selMonth && <span>📅 선택월: {selMonth}</span>}
-          {selCategory !== '전체' && <span>🏷️ {selCategory}</span>}
-          <button className="reset" onClick={resetAll}>전체 데이터 복귀</button>
-        </div>
-      )}
-
       <div className="summary">
         <div className="card"><div className="lbl">{selMonth ? `${selMonth} 지출` : '총 지출'}</div><div className="val">₩{total.toLocaleString()}</div></div>
         <div className="card"><div className="lbl">월평균 <small>(마지막 달 제외)</small></div><div className="val">₩{avg.toLocaleString()}</div></div>
@@ -177,7 +169,7 @@ export default function Dashboard({ expenses, user }) {
         <div className="panel">
           <div className="panel-head">
             <h3>카테고리별 지출 <small>(클릭 시 상세 필터)</small></h3>
-            <button className="reset" onClick={resetAll}>전체 데이터 복귀</button>
+            {isFiltered && <button className="home-btn" onClick={resetAll} title="전체 데이터 복귀">⌂</button>}
           </div>
           <EChart option={pieOption} height={320} onClick={handleDonutClick} />
         </div>
