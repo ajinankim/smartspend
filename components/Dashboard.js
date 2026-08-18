@@ -22,6 +22,7 @@ export default function Dashboard({ expenses, user }) {
   const [endDate, setEndDate] = useState('');
   const [selCategory, setSelCategory] = useState('전체');
   const [selMonth, setSelMonth] = useState(null); // 'YYYY-MM' 또는 null
+  const [trendType, setTrendType] = useState('bar'); // bar | line
 
   const base = useMemo(() => withCategory(expenses).filter((t) => t.date >= DATA_START), [expenses]);
   const maxDate = useMemo(() => (base.length ? [...base.map((t) => t.date)].sort().pop() : ''), [base]);
@@ -74,62 +75,105 @@ export default function Dashboard({ expenses, user }) {
     }],
   }), [cats]);
 
-  // 월별 지출 추이 (카테고리 선택 시: 채워진 선형 + 전체 대비 비중)
+  // 월별 지출 추이 (막대/선형 전환, 카테고리 선택 시 채워진 선형 + 전체 대비 비중)
   const trendOption = useMemo(() => {
     const mtAll = mt;
-    if (selCategory === '전체') {
-      // 전체: 막대 차트
-      const monthTotals = {}, monthCat = {}, monthBrand = {};
-      for (const t of filtered) {
-        const m = t.date.slice(0, 7);
-        monthTotals[m] = (monthTotals[m] || 0) + t.amount;
-        monthCat[m] = monthCat[m] || {};
-        monthCat[m][t.category] = (monthCat[m][t.category] || 0) + t.amount;
-        monthBrand[m] = monthBrand[m] || {};
-        monthBrand[m][t.brand] = (monthBrand[m][t.brand] || 0) + t.amount;
+    const isBar = trendType === 'bar';
+    const allLabels = mtAll.map((x) => x.label);
+    const allVals = mtAll.map((m) => m.total);
+    const yAxis = { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } };
+    const grid = { left: 10, right: 10, top: 28, bottom: 0, containLabel: true };
+    const catMap = {};
+    if (selCategory !== '전체') {
+      monthlyTotals(filtered.filter((t) => t.category === selCategory)).forEach((m) => { catMap[m.month] = m.total; });
+    }
+    const catVals = allLabels.map((_, i) => catMap[mtAll[i].month] || 0);
+
+    if (isBar) {
+      // ---- 막대 차트 ----
+      if (selCategory === '전체') {
+        const monthTotals = {}, monthCat = {}, monthBrand = {};
+        for (const t of filtered) {
+          const m = t.date.slice(0, 7);
+          monthTotals[m] = (monthTotals[m] || 0) + t.amount;
+          monthCat[m] = monthCat[m] || {};
+          monthCat[m][t.category] = (monthCat[m][t.category] || 0) + t.amount;
+          monthBrand[m] = monthBrand[m] || {};
+          monthBrand[m][t.brand] = (monthBrand[m][t.brand] || 0) + t.amount;
+        }
+        const tooltipFmt = (p) => {
+          const m = p[0].dataIndex;
+          const key = mtAll[m].month;
+          const tot = monthTotals[key];
+          const cat = monthCat[key] || {};
+          const br = monthBrand[key] || {};
+          let h = `<b>${mtAll[m].label}</b><br/>총액: ₩${tot.toLocaleString()}`;
+          h += `<br/><hr style="margin:3px 0"/>`;
+          Object.entries(cat).sort((a, b) => b[1] - a[1]).forEach(([c, v]) => {
+            h += `<span style="color:#999">${c}</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
+          });
+          h += `<hr style="margin:3px 0"/>`;
+          Object.entries(br).sort((a, b) => b[1] - a[1]).forEach(([b2, v]) => {
+            h += `<span style="color:#999">${b2}카드</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
+          });
+          return h;
+        };
+        return {
+          tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true, extraCssText: 'max-width:280px;word-break:keep-all;' },
+          grid,
+          xAxis: { type: 'category', data: allLabels, axisLabel: { fontSize: 10 } },
+          yAxis,
+          series: [{ type: 'bar', data: allVals, barMaxWidth: 28, itemStyle: { color: (p) => (selMonth && mtAll[p.dataIndex].month === selMonth ? '#e15759' : '#4e79a7'), borderRadius: [4, 4, 0, 0] } }],
+        };
       }
-      const labels = mtAll.map((x) => x.label);
+      // 카테고리 선택 막대
+      const catColor = CATEGORY_COLORS[selCategory] || '#f28e2b';
       const tooltipFmt = (p) => {
         const m = p[0].dataIndex;
         const key = mtAll[m].month;
-        const tot = monthTotals[key];
-        const cat = monthCat[key] || {};
-        const br = monthBrand[key] || {};
-        let h = `<b>${mtAll[m].label}</b><br/>총액: ₩${tot.toLocaleString()}`;
-        h += `<br/><hr style="margin:3px 0"/>`;
-        Object.entries(cat).sort((a, b) => b[1] - a[1]).forEach(([c, v]) => {
-          h += `<span style="color:#999">${c}</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
-        });
-        h += `<hr style="margin:3px 0"/>`;
-        Object.entries(br).sort((a, b) => b[1] - a[1]).forEach(([b2, v]) => {
-          h += `<span style="color:#999">${b2}카드</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
-        });
+        const catVal = catMap[key] || 0;
+        const totVal = allVals[m];
+        const pct = totVal > 0 ? ((catVal / totVal) * 100) : 0;
+        let h = `<b>${mtAll[m].label}</b>`;
+        h += `<br/><span style="color:${catColor}">● ${selCategory}</span> ₩${catVal.toLocaleString()}`;
+        h += `<br/>전체 지출: ₩${totVal.toLocaleString()}`;
+        h += `<br/><b>비중: ${pct.toFixed(1)}%</b>`;
         return h;
       };
       return {
-        tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true, extraCssText: 'max-width:280px;word-break:keep-all;' },
-        grid: { left: 10, right: 10, top: 10, bottom: 0, containLabel: true },
-        xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
-        yAxis: { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } },
-        series: [{
-          type: 'bar', data: mtAll.map((m) => m.total), barMaxWidth: 28,
-          itemStyle: { color: (p) => (selMonth && mtAll[p.dataIndex].month === selMonth ? '#e15759' : '#4e79a7'), borderRadius: [4, 4, 0, 0] },
-        }],
+        tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true, extraCssText: 'max-width:240px;word-break:keep-all;' },
+        grid,
+        xAxis: { type: 'category', data: allLabels, axisLabel: { fontSize: 10 } },
+        yAxis,
+        series: [{ type: 'bar', data: catVals, barMaxWidth: 28, itemStyle: { color: (p) => (selMonth && mtAll[p.dataIndex].month === selMonth ? '#e15759' : catColor), borderRadius: [4, 4, 0, 0] } }],
       };
     }
-    // 카테고리 선택: 채워진 선형(카테고리) + 전체 지출 선형
+
+    // ---- 선형 차트 ----
+    const totalColor = '#9aa4b2';
+    if (selCategory === '전체') {
+      const tooltipFmt = (p) => {
+        const m = p[0].dataIndex;
+        let h = `<b>${mtAll[m].label}</b><br/>전체 지출: ₩${allVals[m].toLocaleString()}`;
+        return h;
+      };
+      return {
+        tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true },
+        legend: { data: ['전체 지출'], top: 0, textStyle: { fontSize: 11 } },
+        grid,
+        xAxis: { type: 'category', data: allLabels, axisLabel: { fontSize: 10 } },
+        yAxis,
+        series: [{ name: '전체 지출', type: 'line', smooth: true, data: allVals, showSymbol: false, lineStyle: { color: totalColor, width: 2.5 }, itemStyle: { color: totalColor }, areaStyle: { color: hexToRgba(totalColor, 0.2) } }],
+      };
+    }
+    // 카테고리 선택 선형: 채워진 카테고리 선 + 전체 선
     const catColor = CATEGORY_COLORS[selCategory] || '#f28e2b';
     const lighter = hexToRgba(catColor, 0.25);
-    const catMap = {};
-    monthlyTotals(filtered.filter((t) => t.category === selCategory)).forEach((m) => { catMap[m.month] = m.total; });
-    const labels = mtAll.map((x) => x.label);
-    const catSeriesData = mtAll.map((m) => catMap[m.month] || 0);
-    const allSeriesData = mtAll.map((m) => m.total);
     const tooltipFmt = (p) => {
       const m = p[0].dataIndex;
       const key = mtAll[m].month;
       const catVal = catMap[key] || 0;
-      const totVal = allSeriesData[m];
+      const totVal = allVals[m];
       const pct = totVal > 0 ? ((catVal / totVal) * 100) : 0;
       let h = `<b>${mtAll[m].label}</b>`;
       h += `<br/><span style="color:${catColor}">● ${selCategory}</span> ₩${catVal.toLocaleString()}`;
@@ -140,15 +184,15 @@ export default function Dashboard({ expenses, user }) {
     return {
       tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true, extraCssText: 'max-width:240px;word-break:keep-all;' },
       legend: { data: [selCategory, '전체 지출'], top: 0, textStyle: { fontSize: 11 } },
-      grid: { left: 10, right: 10, top: 28, bottom: 0, containLabel: true },
-      xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
-      yAxis: { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } },
+      grid,
+      xAxis: { type: 'category', data: allLabels, axisLabel: { fontSize: 10 } },
+      yAxis,
       series: [
-        { name: selCategory, type: 'line', smooth: true, data: catSeriesData, showSymbol: false, lineStyle: { color: catColor, width: 2.5 }, itemStyle: { color: catColor }, areaStyle: { color: lighter } },
-        { name: '전체 지출', type: 'line', smooth: true, data: allSeriesData, showSymbol: false, lineStyle: { color: '#9aa4b2', width: 2 }, itemStyle: { color: '#9aa4b2' } },
+        { name: selCategory, type: 'line', smooth: true, data: catVals, showSymbol: false, lineStyle: { color: catColor, width: 2.5 }, itemStyle: { color: catColor }, areaStyle: { color: lighter } },
+        { name: '전체 지출', type: 'line', smooth: true, data: allVals, showSymbol: false, lineStyle: { color: totalColor, width: 2 }, itemStyle: { color: totalColor } },
       ],
     };
-  }, [filtered, mt, selCategory, selMonth]);
+  }, [filtered, mt, selCategory, selMonth, trendType]);
 
   const handleBarClick = (params) => {
     if (params && params.dataIndex != null) {
@@ -211,7 +255,16 @@ export default function Dashboard({ expenses, user }) {
           </div>
           <EChart option={pieOption} height={320} onClick={handleDonutClick} />
         </div>
-        <div className="panel"><h3>월별 지출 추이 <small>(막대 클릭 시 해당 월 필터)</small></h3><EChart option={trendOption} height={320} onClick={handleBarClick} /></div>
+        <div className="panel">
+          <div className="panel-head">
+            <h3>월별 지출 추이 <small>(클릭 시 해당 월 필터)</small></h3>
+            <div className="chart-toggle">
+              <button className={trendType === 'bar' ? 'on' : ''} onClick={() => setTrendType('bar')}>📊 막대</button>
+              <button className={trendType === 'line' ? 'on' : ''} onClick={() => setTrendType('line')}>📈 선형</button>
+            </div>
+          </div>
+          <EChart option={trendOption} height={320} onClick={handleBarClick} />
+        </div>
       </div>
 
       <div className="panel">

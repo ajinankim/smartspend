@@ -64,5 +64,9 @@ body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f4f
 .top2-rank { width: 22px; height: 22px; border-radius: 50%; background: #1a2332; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .top2-name { font-weight: 700; font-size: 13px; }
 .top2-amt { font-weight: 700; font-size: 13px; }
-.home-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid #e15759; background: #fff; color: #e15759; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.home-btn:hover { background: #fff0f0; }
+.home-btn { width: 32px; height: 32px; border-radius: 50%; border: none; background: linear-gradient(135deg, #f28e2b, #e15759); color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(225, 87, 89, .4); transition: transform .15s, box-shadow .15s; }
+.home-btn:hover { transform: scale(1.12); box-shadow: 0 4px 12px rgba(225, 87, 89, .5); }
+.home-btn:active { transform: scale(.95); }
+.chart-toggle { display: flex; gap: 4px; }
+.chart-toggle button { padding: 5px 11px; border: 1px solid #ccc; border-radius: 7px; background: #fff; cursor: pointer; font-size: 12px; color: #666; }
+.chart-toggle button.on { background: #1a2332; color: #fff; border-color: #1a2332; font-weight: 600; }
