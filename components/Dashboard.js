@@ -8,6 +8,14 @@ import EChart from './EChart';
 
 const DATA_START = '2025-09-01'; // 2025년 9월부터만
 
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function Dashboard({ expenses, user }) {
   const [brand, setBrand] = useState('전체');
   const [startDate, setStartDate] = useState('2025-09-01');
@@ -66,66 +74,81 @@ export default function Dashboard({ expenses, user }) {
     }],
   }), [cats]);
 
-  // 월별 추이 (툴팁: 카테고리/카드사 구성비, 클릭 시 월 필터, 도넛 클릭 시 카테고리 필터)
-  const barOption = useMemo(() => {
-    const trendSrc = selCategory === '전체' ? filtered : filtered.filter((t) => t.category === selCategory);
-    const mtCat = monthlyTotals(trendSrc);
-    const monthTotals = {}, monthCat = {}, monthBrand = {};
-    for (const t of trendSrc) {
-      const m = t.date.slice(0, 7);
-      monthTotals[m] = (monthTotals[m] || 0) + t.amount;
-      monthCat[m] = monthCat[m] || {};
-      monthCat[m][t.category] = (monthCat[m][t.category] || 0) + t.amount;
-      monthBrand[m] = monthBrand[m] || {};
-      monthBrand[m][t.brand] = (monthBrand[m][t.brand] || 0) + t.amount;
-    }
-    const labels = mtCat.map((x) => x.label);
-    // 선택 카테고리의 CAGR (선택 기간 기준, 마지막 달에 표시)
-    let cagr = null;
-    if (selCategory !== '전체' && mtCat.length >= 2) {
-      const first = mtCat[0].total;
-      const last = mtCat[mtCat.length - 1].total;
-      if (first > 0 && last > 0) {
-        const years = mtCat.length / 12;
-        cagr = (Math.pow(last / first, 1 / years)) - 1;
+  // 월별 지출 추이 (카테고리 선택 시: 채워진 선형 + 전체 대비 비중)
+  const trendOption = useMemo(() => {
+    const mtAll = mt;
+    if (selCategory === '전체') {
+      // 전체: 막대 차트
+      const monthTotals = {}, monthCat = {}, monthBrand = {};
+      for (const t of filtered) {
+        const m = t.date.slice(0, 7);
+        monthTotals[m] = (monthTotals[m] || 0) + t.amount;
+        monthCat[m] = monthCat[m] || {};
+        monthCat[m][t.category] = (monthCat[m][t.category] || 0) + t.amount;
+        monthBrand[m] = monthBrand[m] || {};
+        monthBrand[m][t.brand] = (monthBrand[m][t.brand] || 0) + t.amount;
       }
+      const labels = mtAll.map((x) => x.label);
+      const tooltipFmt = (p) => {
+        const m = p[0].dataIndex;
+        const key = mtAll[m].month;
+        const tot = monthTotals[key];
+        const cat = monthCat[key] || {};
+        const br = monthBrand[key] || {};
+        let h = `<b>${mtAll[m].label}</b><br/>총액: ₩${tot.toLocaleString()}`;
+        h += `<br/><hr style="margin:3px 0"/>`;
+        Object.entries(cat).sort((a, b) => b[1] - a[1]).forEach(([c, v]) => {
+          h += `<span style="color:#999">${c}</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
+        });
+        h += `<hr style="margin:3px 0"/>`;
+        Object.entries(br).sort((a, b) => b[1] - a[1]).forEach(([b2, v]) => {
+          h += `<span style="color:#999">${b2}카드</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
+        });
+        return h;
+      };
+      return {
+        tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true, extraCssText: 'max-width:280px;word-break:keep-all;' },
+        grid: { left: 10, right: 10, top: 10, bottom: 0, containLabel: true },
+        xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
+        yAxis: { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } },
+        series: [{
+          type: 'bar', data: mtAll.map((m) => m.total), barMaxWidth: 28,
+          itemStyle: { color: (p) => (selMonth && mtAll[p.dataIndex].month === selMonth ? '#e15759' : '#4e79a7'), borderRadius: [4, 4, 0, 0] },
+        }],
+      };
     }
+    // 카테고리 선택: 채워진 선형(카테고리) + 전체 지출 선형
+    const catColor = CATEGORY_COLORS[selCategory] || '#f28e2b';
+    const lighter = hexToRgba(catColor, 0.25);
+    const catMap = {};
+    monthlyTotals(filtered.filter((t) => t.category === selCategory)).forEach((m) => { catMap[m.month] = m.total; });
+    const labels = mtAll.map((x) => x.label);
+    const catSeriesData = mtAll.map((m) => catMap[m.month] || 0);
+    const allSeriesData = mtAll.map((m) => m.total);
     const tooltipFmt = (p) => {
       const m = p[0].dataIndex;
-      const key = mtCat[m].month;
-      const tot = monthTotals[key];
-      const cat = monthCat[key] || {};
-      const br = monthBrand[key] || {};
-      let h = `<b>${mtCat[m].label}</b><br/>총액: ₩${tot.toLocaleString()}`;
-      h += `<br/><hr style="margin:3px 0"/>`;
-      Object.entries(cat).sort((a, b) => b[1] - a[1]).forEach(([c, v]) => {
-        h += `<span style="color:#999">${c}</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
-      });
-      h += `<hr style="margin:3px 0"/>`;
-      Object.entries(br).sort((a, b) => b[1] - a[1]).forEach(([b2, v]) => {
-        h += `<span style="color:#999">${b2}카드</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
-      });
+      const key = mtAll[m].month;
+      const catVal = catMap[key] || 0;
+      const totVal = allSeriesData[m];
+      const pct = totVal > 0 ? ((catVal / totVal) * 100) : 0;
+      let h = `<b>${mtAll[m].label}</b>`;
+      h += `<br/><span style="color:${catColor}">● ${selCategory}</span> ₩${catVal.toLocaleString()}`;
+      h += `<br/>전체 지출: ₩${totVal.toLocaleString()}`;
+      h += `<br/><b>비중: ${pct.toFixed(1)}%</b>`;
       return h;
     };
     return {
-      tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true, extraCssText: 'max-width:280px;word-break:keep-all;' },
-      grid: { left: 10, right: 10, top: 10, bottom: 0, containLabel: true },
+      tooltip: { trigger: 'axis', formatter: tooltipFmt, confine: true, extraCssText: 'max-width:240px;word-break:keep-all;' },
+      legend: { data: [selCategory, '전체 지출'], top: 0, textStyle: { fontSize: 11 } },
+      grid: { left: 10, right: 10, top: 28, bottom: 0, containLabel: true },
       xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
       yAxis: { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } },
-      series: [{
-        type: 'bar', data: mtCat.map((m) => m.total), barMaxWidth: 28,
-        label: {
-          show: true, position: 'top', fontSize: 10, fontWeight: 'bold', color: '#c0392b',
-          formatter: (p) => (cagr != null && p.dataIndex === mtCat.length - 1)
-            ? `CAGR ${cagr >= 0 ? '+' : ''}${(cagr * 100).toFixed(1)}%` : '',
-        },
-        itemStyle: {
-          color: (p) => (selMonth && mtCat[p.dataIndex].month === selMonth ? '#e15759' : selCategory !== '전체' ? '#f28e2b' : '#4e79a7'),
-          borderRadius: [4, 4, 0, 0],
-        },
-      }],
+      series: [
+        { name: selCategory, type: 'line', smooth: true, data: catSeriesData, showSymbol: false, lineStyle: { color: catColor, width: 2.5 }, itemStyle: { color: catColor }, areaStyle: { color: lighter } },
+        { name: '전체 지출', type: 'line', smooth: true, data: allSeriesData, showSymbol: false, lineStyle: { color: '#9aa4b2', width: 2 }, itemStyle: { color: '#9aa4b2' } },
+      ],
     };
-  }, [filtered, selCategory, selMonth]);
+  }, [filtered, mt, selCategory, selMonth]);
 
   const handleBarClick = (params) => {
     if (params && params.dataIndex != null) {
@@ -188,7 +211,7 @@ export default function Dashboard({ expenses, user }) {
           </div>
           <EChart option={pieOption} height={320} onClick={handleDonutClick} />
         </div>
-        <div className="panel"><h3>월별 지출 추이 <small>(막대 클릭 시 해당 월 필터)</small></h3><EChart option={barOption} height={320} onClick={handleBarClick} /></div>
+        <div className="panel"><h3>월별 지출 추이 <small>(막대 클릭 시 해당 월 필터)</small></h3><EChart option={trendOption} height={320} onClick={handleBarClick} /></div>
       </div>
 
       <div className="panel">
