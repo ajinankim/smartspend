@@ -45,7 +45,7 @@ export default function Dashboard({ expenses, user }) {
   }, [viewData]);
   const avg = useMemo(() => monthlyAverage(viewData), [viewData]);
   const total = viewData.reduce((s, t) => s + t.amount, 0);
-  const top3 = cats.slice(0, 3);
+  const top2 = cats.slice(0, 2);
 
   // 상세 내역: 월 + 카테고리 필터
   const detailRows = useMemo(() => {
@@ -66,10 +66,12 @@ export default function Dashboard({ expenses, user }) {
     }],
   }), [cats]);
 
-  // 월별 추이 (툴팁: 카테고리/카드사 구성비, 클릭 시 월 필터)
+  // 월별 추이 (툴팁: 카테고리/카드사 구성비, 클릭 시 월 필터, 도넛 클릭 시 카테고리 필터)
   const barOption = useMemo(() => {
+    const trendSrc = selCategory === '전체' ? filtered : filtered.filter((t) => t.category === selCategory);
+    const mtCat = monthlyTotals(trendSrc);
     const monthTotals = {}, monthCat = {}, monthBrand = {};
-    for (const t of filtered) {
+    for (const t of trendSrc) {
       const m = t.date.slice(0, 7);
       monthTotals[m] = (monthTotals[m] || 0) + t.amount;
       monthCat[m] = monthCat[m] || {};
@@ -77,14 +79,14 @@ export default function Dashboard({ expenses, user }) {
       monthBrand[m] = monthBrand[m] || {};
       monthBrand[m][t.brand] = (monthBrand[m][t.brand] || 0) + t.amount;
     }
-    const labels = mt.map((x) => x.label);
+    const labels = mtCat.map((x) => x.label);
     const tooltipFmt = (p) => {
       const m = p[0].dataIndex;
-      const key = mt[m].month;
+      const key = mtCat[m].month;
       const tot = monthTotals[key];
       const cat = monthCat[key] || {};
       const br = monthBrand[key] || {};
-      let h = `<b>${mt[m].label}</b><br/>총액: ₩${tot.toLocaleString()}`;
+      let h = `<b>${mtCat[m].label}</b><br/>총액: ₩${tot.toLocaleString()}`;
       h += `<br/><hr style="margin:3px 0"/>`;
       Object.entries(cat).sort((a, b) => b[1] - a[1]).forEach(([c, v]) => {
         h += `<span style="color:#999">${c}</span> ₩${v.toLocaleString()} (${((v / tot) * 100).toFixed(1)}%)<br/>`;
@@ -101,14 +103,14 @@ export default function Dashboard({ expenses, user }) {
       xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
       yAxis: { type: 'value', axisLabel: { formatter: (v) => `${v >= 10000 ? (v / 10000).toFixed(1) + '만' : v}` } },
       series: [{
-        type: 'bar', data: mt.map((m) => m.total), barMaxWidth: 28,
+        type: 'bar', data: mtCat.map((m) => m.total), barMaxWidth: 28,
         itemStyle: {
-          color: (p) => (selMonth && mt[p.dataIndex].month === selMonth ? '#e15759' : '#4e79a7'),
+          color: (p) => (selMonth && mtCat[p.dataIndex].month === selMonth ? '#e15759' : selCategory !== '전체' ? '#f28e2b' : '#4e79a7'),
           borderRadius: [4, 4, 0, 0],
         },
       }],
     };
-  }, [filtered, mt, selMonth]);
+  }, [filtered, selCategory, selMonth]);
 
   const handleBarClick = (params) => {
     if (params && params.dataIndex != null) {
@@ -154,16 +156,20 @@ export default function Dashboard({ expenses, user }) {
 
       <div className="summary">
         <div className="card"><div className="lbl">{selMonth ? `${selMonth} 지출` : '총 지출'}</div><div className="val">₩{total.toLocaleString()}</div></div>
-        <div className="card"><div className="lbl">월평균</div><div className="val">₩{avg.toLocaleString()}</div></div>
-        <div className="card top3">
-          <div className="lbl">지출 TOP 3</div>
-          {top3.map((c, i) => (
-            <div key={c.name} className="top3-row">
-              <span className="top3-rank">{i + 1}</span>
-              <span className="top3-name" style={{ color: CATEGORY_COLORS[c.name] }}>{c.name}</span>
-              <span className="top3-amt">₩{c.total.toLocaleString()}</span>
-            </div>
-          ))}
+        <div className="card"><div className="lbl">월평균 <small>(마지막 달 제외)</small></div><div className="val">₩{avg.toLocaleString()}</div></div>
+        <div className="card top2">
+          <div className="lbl">지출 TOP 2</div>
+          <div className="top2-cols">
+            {top2.map((c, i) => (
+              <div key={c.name} className="top2-col">
+                <div className="top2-rank">{i + 1}</div>
+                <div>
+                  <div className="top2-name" style={{ color: CATEGORY_COLORS[c.name] }}>{c.name}</div>
+                  <div className="top2-amt">₩{c.total.toLocaleString()}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
